@@ -46,8 +46,8 @@ public class MainActivity extends AppCompatActivity {
                 ResourcesCompat.getColorStateList(getResources(), R.color.text_colors, getTheme()));
         pinView.setLineColor(
                 ResourcesCompat.getColor(getResources(), R.color.colorPrimary, getTheme()));
-        pinView.setLineColor(
-                ResourcesCompat.getColorStateList(getResources(), R.color.line_colors, getTheme()));
+        pinView.setNonEmptyLineColor(
+                ResourcesCompat.getColor(getResources(), R.color.colorAccent, getTheme()));
         pinView.setItemCount(4);
         pinView.setItemHeight(getResources().getDimensionPixelSize(R.dimen.pv_pin_view_item_size));
         pinView.setItemWidth(getResources().getDimensionPixelSize(R.dimen.pv_pin_view_item_size));

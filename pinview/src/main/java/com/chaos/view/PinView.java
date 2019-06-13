@@ -18,7 +18,6 @@ package com.chaos.view;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
-import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
@@ -34,9 +33,7 @@ import android.graphics.drawable.Drawable;
 import android.text.InputFilter;
 import android.text.TextPaint;
 import android.text.TextUtils;
-import android.text.method.MovementMethod;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.ActionMode;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -76,29 +73,23 @@ public class PinView extends AppCompatEditText {
     private static final int VIEW_TYPE_RECTANGLE = 0;
     private static final int VIEW_TYPE_LINE = 1;
     private static final int VIEW_TYPE_NONE = 2;
-
-    private int mViewType;
-
-    private int mPinItemCount;
-
-    private int mPinItemWidth;
-    private int mPinItemHeight;
-    private int mPinItemRadius;
-    private int mPinItemSpacing;
-
     private final Paint mPaint;
     private final TextPaint mAnimatorTextPaint = new TextPaint();
-
-    private ColorStateList mLineColor;
-    private int mCurLineColor = Color.BLACK;
-    private int mLineWidth;
-
     private final Rect mTextRect = new Rect();
     private final RectF mItemBorderRect = new RectF();
     private final RectF mItemLineRect = new RectF();
     private final Path mPath = new Path();
     private final PointF mItemCenterPoint = new PointF();
-
+    private int mViewType;
+    private int mPinItemCount;
+    private int mPinItemWidth;
+    private int mPinItemHeight;
+    private int mPinItemRadius;
+    private int mPinItemSpacing;
+    private int mLineColor;
+    private int mNonEmptyLineColor;
+    private int mCurLineColor;
+    private int mLineWidth;
     private ValueAnimator mDefaultAddAnimator;
     private boolean isAnimationEnable = false;
 
@@ -147,20 +138,19 @@ public class PinView extends AppCompatEditText {
         mPinItemRadius = (int) a.getDimension(R.styleable.PinView_itemRadius, 0);
         mLineWidth = (int) a.getDimension(R.styleable.PinView_lineWidth,
                 res.getDimensionPixelSize(R.dimen.pv_pin_view_item_line_width));
-        mLineColor = a.getColorStateList(R.styleable.PinView_lineColor);
+        mLineColor = a.getColor(R.styleable.PinView_lineColor, Color.GRAY);
+        mNonEmptyLineColor = a.getColor(R.styleable.PinView_lineColor, Color.BLACK);
         isCursorVisible = a.getBoolean(R.styleable.PinView_android_cursorVisible, true);
-        mCursorColor = a.getColor(R.styleable.PinView_cursorColor, getCurrentTextColor());
-        mCursorWidth = a.getDimensionPixelSize(R.styleable.PinView_cursorWidth,
-                res.getDimensionPixelSize(R.dimen.pv_pin_view_cursor_width));
+        mCursorColor = a.getColor(R.styleable.PinView_cursorColor, Color.TRANSPARENT);
+        mCursorWidth = a.getDimensionPixelSize(R.styleable.PinView_cursorWidth, res.getDimensionPixelSize(R.dimen.pv_pin_view_cursor_width));
 
         mItemBackground = a.getDrawable(R.styleable.PinView_android_itemBackground);
         mHideLineWhenFilled = a.getBoolean(R.styleable.PinView_hideLineWhenFilled, false);
 
         a.recycle();
 
-        if (mLineColor != null) {
-            mCurLineColor = mLineColor.getDefaultColor();
-        }
+        mCurLineColor = mLineColor;
+
         updateCursorHeight();
 
         checkItemRadius();
@@ -171,6 +161,17 @@ public class PinView extends AppCompatEditText {
 
         super.setCursorVisible(false);
         disableSelectionMenu();
+    }
+
+    private static boolean isPasswordInputType(int inputType) {
+        final int variation =
+                inputType & (EditorInfo.TYPE_MASK_CLASS | EditorInfo.TYPE_MASK_VARIATION);
+        return variation
+                == (EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_PASSWORD)
+                || variation
+                == (EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_WEB_PASSWORD)
+                || variation
+                == (EditorInfo.TYPE_CLASS_NUMBER | EditorInfo.TYPE_NUMBER_VARIATION_PASSWORD);
     }
 
     @Override
@@ -303,9 +304,7 @@ public class PinView extends AppCompatEditText {
     protected void drawableStateChanged() {
         super.drawableStateChanged();
 
-        if (mLineColor == null || mLineColor.isStateful()) {
-            updateColors();
-        }
+        updateColors();
     }
 
     @Override
@@ -328,8 +327,8 @@ public class PinView extends AppCompatEditText {
     private void drawPinView(Canvas canvas) {
         int highlightIdx = getText().length();
         for (int i = 0; i < mPinItemCount; i++) {
-            boolean highlight = isFocused() && highlightIdx == i;
-            mPaint.setColor(highlight ? getLineColorForState(HIGHLIGHT_STATES) : mCurLineColor);
+            boolean highlight = i < highlightIdx;
+            mPaint.setColor(highlight ? mNonEmptyLineColor : mCurLineColor);
 
             updateItemRectF(i);
             updateCenterPoint();
@@ -366,20 +365,6 @@ public class PinView extends AppCompatEditText {
                 drawHint(canvas, i);
             }
         }
-
-        // highlight the next item
-        if (isFocused() && getText().length() != mPinItemCount && mViewType == VIEW_TYPE_RECTANGLE) {
-            int index = getText().length();
-            updateItemRectF(index);
-            updateCenterPoint();
-            updatePinBoxPath(index);
-            mPaint.setColor(getLineColorForState(HIGHLIGHT_STATES));
-            drawPinBox(canvas, index);
-        }
-    }
-
-    private int getLineColorForState(int... states) {
-        return mLineColor != null ? mLineColor.getColorForState(states, mCurLineColor) : mCurLineColor;
     }
 
     private void drawItemBackground(Canvas canvas, boolean highlight) {
@@ -611,23 +596,9 @@ public class PinView extends AppCompatEditText {
     }
 
     private void updateColors() {
-        boolean inval = false;
+        mCurLineColor = mLineColor;
 
-        int color;
-        if (mLineColor != null) {
-            color = mLineColor.getColorForState(getDrawableState(), 0);
-        } else {
-            color = getCurrentTextColor();
-        }
-
-        if (color != mCurLineColor) {
-            mCurLineColor = color;
-            inval = true;
-        }
-
-        if (inval) {
-            invalidate();
-        }
+        invalidate();
     }
 
     private void updateCenterPoint() {
@@ -636,35 +607,17 @@ public class PinView extends AppCompatEditText {
         mItemCenterPoint.set(cx, cy);
     }
 
-    private static boolean isPasswordInputType(int inputType) {
-        final int variation =
-                inputType & (EditorInfo.TYPE_MASK_CLASS | EditorInfo.TYPE_MASK_VARIATION);
-        return variation
-                == (EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_PASSWORD)
-                || variation
-                == (EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_WEB_PASSWORD)
-                || variation
-                == (EditorInfo.TYPE_CLASS_NUMBER | EditorInfo.TYPE_NUMBER_VARIATION_PASSWORD);
-    }
-
     /*@Override
     protected MovementMethod getDefaultMovementMethod() {
         return DefaultMovementMethod.getInstance();
     }*/
 
-    /**
-     * Sets the line color for all the states (normal, selected,
-     * focused) to be this color.
-     *
-     * @param color A color value in the form 0xAARRGGBB.
-     *              Do not pass a resource ID. To get a color value from a resource ID, call
-     *              {@link androidx.core.content.ContextCompat#getColor(Context, int) getColor}.
-     * @attr ref R.styleable#PinView_lineColor
-     * @see #setLineColor(ColorStateList)
-     * @see #getLineColors()
-     */
-    public void setLineColor(@ColorInt int color) {
-        mLineColor = ColorStateList.valueOf(color);
+    public int getNonEmptyLineColor() {
+        return mNonEmptyLineColor;
+    }
+
+    public void setNonEmptyLineColor(int color) {
+        mNonEmptyLineColor = color;
         updateColors();
     }
 
@@ -675,12 +628,8 @@ public class PinView extends AppCompatEditText {
      * @see #setLineColor(int)
      * @see #getLineColors()
      */
-    public void setLineColor(ColorStateList colors) {
-        if (colors == null) {
-            throw new NullPointerException();
-        }
-
-        mLineColor = colors;
+    public void setLineColor(int color) {
+        mLineColor = color;
         updateColors();
     }
 
@@ -688,10 +637,9 @@ public class PinView extends AppCompatEditText {
      * Gets the line colors for the different states (normal, selected, focused) of the PinView.
      *
      * @attr ref R.styleable#PinView_lineColor
-     * @see #setLineColor(ColorStateList)
      * @see #setLineColor(int)
      */
-    public ColorStateList getLineColors() {
+    public int getLineColors() {
         return mLineColor;
     }
 
@@ -703,6 +651,14 @@ public class PinView extends AppCompatEditText {
     @ColorInt
     public int getCurrentLineColor() {
         return mCurLineColor;
+    }
+
+    /**
+     * @return Returns the width of the item's line.
+     * @see #setLineWidth(int)
+     */
+    public int getLineWidth() {
+        return mLineWidth;
     }
 
     /**
@@ -718,11 +674,11 @@ public class PinView extends AppCompatEditText {
     }
 
     /**
-     * @return Returns the width of the item's line.
-     * @see #setLineWidth(int)
+     * @return Returns the count of items.
+     * @see #setItemCount(int)
      */
-    public int getLineWidth() {
-        return mLineWidth;
+    public int getItemCount() {
+        return mPinItemCount;
     }
 
     /**
@@ -738,11 +694,11 @@ public class PinView extends AppCompatEditText {
     }
 
     /**
-     * @return Returns the count of items.
-     * @see #setItemCount(int)
+     * @return Returns the radius of square.
+     * @see #setItemRadius(int)
      */
-    public int getItemCount() {
-        return mPinItemCount;
+    public int getItemRadius() {
+        return mPinItemRadius;
     }
 
     /**
@@ -758,11 +714,12 @@ public class PinView extends AppCompatEditText {
     }
 
     /**
-     * @return Returns the radius of square.
-     * @see #setItemRadius(int)
+     * @return Returns the spacing between two items.
+     * @see #setItemSpacing(int)
      */
-    public int getItemRadius() {
-        return mPinItemRadius;
+    @Px
+    public int getItemSpacing() {
+        return mPinItemSpacing;
     }
 
     /**
@@ -777,12 +734,11 @@ public class PinView extends AppCompatEditText {
     }
 
     /**
-     * @return Returns the spacing between two items.
-     * @see #setItemSpacing(int)
+     * @return Returns the height of item.
+     * @see #setItemHeight(int)
      */
-    @Px
-    public int getItemSpacing() {
-        return mPinItemSpacing;
+    public int getItemHeight() {
+        return mPinItemHeight;
     }
 
     /**
@@ -798,11 +754,11 @@ public class PinView extends AppCompatEditText {
     }
 
     /**
-     * @return Returns the height of item.
-     * @see #setItemHeight(int)
+     * @return Returns the width of item.
+     * @see #setItemWidth(int)
      */
-    public int getItemHeight() {
-        return mPinItemHeight;
+    public int getItemWidth() {
+        return mPinItemWidth;
     }
 
     /**
@@ -815,14 +771,6 @@ public class PinView extends AppCompatEditText {
         mPinItemWidth = itemWidth;
         checkItemRadius();
         requestLayout();
-    }
-
-    /**
-     * @return Returns the width of item.
-     * @see #setItemWidth(int)
-     */
-    public int getItemWidth() {
-        return mPinItemWidth;
     }
 
     /**
@@ -860,6 +808,7 @@ public class PinView extends AppCompatEditText {
     }
 
     //region ItemBackground
+
     /**
      * Set the item background to a given resource. The resource should refer to
      * a Drawable object or 0 to remove the item background.
@@ -906,6 +855,14 @@ public class PinView extends AppCompatEditText {
     //region Cursor
 
     /**
+     * @return Returns the width (in pixels) of cursor.
+     * @see #setCursorWidth(int)
+     */
+    public int getCursorWidth() {
+        return mCursorWidth;
+    }
+
+    /**
      * Sets the width (in pixels) of cursor.
      *
      * @attr ref R.styleable#PinView_cursorWidth
@@ -919,11 +876,13 @@ public class PinView extends AppCompatEditText {
     }
 
     /**
-     * @return Returns the width (in pixels) of cursor.
-     * @see #setCursorWidth(int)
+     * Gets the cursor color.
+     *
+     * @return Return current cursor color.
+     * @see #setCursorColor(int)
      */
-    public int getCursorWidth() {
-        return mCursorWidth;
+    public int getCursorColor() {
+        return mCursorColor;
     }
 
     /**
@@ -942,14 +901,9 @@ public class PinView extends AppCompatEditText {
         }
     }
 
-    /**
-     * Gets the cursor color.
-     *
-     * @return Return current cursor color.
-     * @see #setCursorColor(int)
-     */
-    public int getCursorColor() {
-        return mCursorColor;
+    @Override
+    public boolean isCursorVisible() {
+        return isCursorVisible;
     }
 
     @Override
@@ -959,11 +913,6 @@ public class PinView extends AppCompatEditText {
             invalidateCursor(isCursorVisible);
             makeBlink();
         }
-    }
-
-    @Override
-    public boolean isCursorVisible() {
-        return isCursorVisible;
     }
 
     @Override
@@ -1036,6 +985,43 @@ public class PinView extends AppCompatEditText {
         mCursorHeight = mPinItemHeight - getTextSize() > delta ? getTextSize() + delta : getTextSize();
     }
 
+    //region Selection Menu
+    private void disableSelectionMenu() {
+        setCustomSelectionActionModeCallback(new ActionMode.Callback() {
+            @Override
+            public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+                return false;
+            }
+
+            @Override
+            public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+                return false;
+            }
+
+            @Override
+            public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                return false;
+            }
+
+            @Override
+            public void onDestroyActionMode(ActionMode mode) {
+                // no-op
+            }
+        });
+        setLongClickable(false);
+    }
+    //endregion
+
+    @Override
+    public boolean isSuggestionsEnabled() {
+        return false;
+    }
+
+    private int dpToPx(float dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
+    }
+    //endregion
+
     private class Blink implements Runnable {
         private boolean mCancelled;
 
@@ -1063,42 +1049,5 @@ public class PinView extends AppCompatEditText {
         void uncancel() {
             mCancelled = false;
         }
-    }
-    //endregion
-
-    //region Selection Menu
-    private void disableSelectionMenu() {
-        setCustomSelectionActionModeCallback(new ActionMode.Callback() {
-            @Override
-            public boolean onCreateActionMode(ActionMode mode, Menu menu) {
-                return false;
-            }
-
-            @Override
-            public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
-                return false;
-            }
-
-            @Override
-            public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
-                return false;
-            }
-
-            @Override
-            public void onDestroyActionMode(ActionMode mode) {
-                // no-op
-            }
-        });
-        setLongClickable(false);
-    }
-
-    @Override
-    public boolean isSuggestionsEnabled() {
-        return false;
-    }
-    //endregion
-
-    private int dpToPx(float dp) {
-        return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
     }
 }

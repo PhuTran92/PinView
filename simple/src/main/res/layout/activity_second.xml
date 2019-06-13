@@ -37,7 +37,7 @@
         android:layout_centerHorizontal="true"
         android:layout_margin="@dimen/common_padding"
         android:inputType="number"
-        android:textColor="@color/text_colors"
+        android:textColor="@android:color/black"
         app:itemRadius="@dimen/pv_pin_view_item_radius" />
 
     <TextView
