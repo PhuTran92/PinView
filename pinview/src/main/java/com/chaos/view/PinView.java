@@ -39,7 +39,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
-import android.view.inputmethod.EditorInfo;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.DrawableRes;
@@ -92,6 +91,7 @@ public class PinView extends AppCompatEditText {
     private int mLineWidth;
     private ValueAnimator mDefaultAddAnimator;
     private boolean isAnimationEnable = false;
+    private boolean mIsPasswordType = false;
 
     private Blink mBlink;
     private boolean isCursorVisible;
@@ -99,11 +99,21 @@ public class PinView extends AppCompatEditText {
     private float mCursorHeight;
     private int mCursorWidth;
     private int mCursorColor;
+    private int previousSize;
+    private boolean delayPasswordEnable = false;
 
     private int mItemBackgroundResource;
     private Drawable mItemBackground;
 
     private boolean mHideLineWhenFilled;
+
+    private final Runnable updatePreviousSizeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            previousSize = getText() == null ? 0 : getText().length();
+            invalidate();
+        }
+    };
 
     public PinView(Context context) {
         this(context, null);
@@ -163,15 +173,12 @@ public class PinView extends AppCompatEditText {
         disableSelectionMenu();
     }
 
-    private static boolean isPasswordInputType(int inputType) {
-        final int variation =
-                inputType & (EditorInfo.TYPE_MASK_CLASS | EditorInfo.TYPE_MASK_VARIATION);
-        return variation
-                == (EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_PASSWORD)
-                || variation
-                == (EditorInfo.TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_WEB_PASSWORD)
-                || variation
-                == (EditorInfo.TYPE_CLASS_NUMBER | EditorInfo.TYPE_NUMBER_VARIATION_PASSWORD);
+    private boolean isPasswordInputType() {
+        return mIsPasswordType;
+    }
+
+    public void setDelayPasswordEnable(boolean isEnable) {
+        this.delayPasswordEnable = isEnable;
     }
 
     @Override
@@ -185,6 +192,10 @@ public class PinView extends AppCompatEditText {
         if (mAnimatorTextPaint != null) {
             mAnimatorTextPaint.set(getPaint());
         }
+    }
+
+    public void setPasswordType(boolean isPasswordType) {
+        this.mIsPasswordType = isPasswordType;
     }
 
     private void setMaxLength(int maxLength) {
@@ -259,7 +270,14 @@ public class PinView extends AppCompatEditText {
     }
 
     @Override
-    protected void onTextChanged(CharSequence text, int start, int lengthBefore, int lengthAfter) {
+    protected void onTextChanged(final CharSequence text, int start, int lengthBefore, int lengthAfter) {
+        if (text.length() <= previousSize || !delayPasswordEnable) {
+            previousSize = text.length();
+        } else {
+            previousSize = text.length() - 1;
+            postDelayed(updatePreviousSizeRunnable, 250);
+        }
+
         if (start != text.length()) {
             moveSelectionToEnd();
         }
@@ -356,8 +374,12 @@ public class PinView extends AppCompatEditText {
             }
 
             if (getText().length() > i) {
-                if (isPasswordInputType(getInputType())) {
-                    drawCircle(canvas, i);
+                if (isPasswordInputType()) {
+                    if (i < previousSize) {
+                        drawCircle(canvas, i);
+                    } else {
+                        drawText(canvas, i);
+                    }
                 } else {
                     drawText(canvas, i);
                 }
@@ -554,11 +576,11 @@ public class PinView extends AppCompatEditText {
         canvas.drawText(text, charAt, charAt + 1, x, y, paint);
     }
 
-    private void drawCircle(Canvas canvas, int i) {
+    private void drawCircle(final Canvas canvas, final int i) {
         Paint paint = getPaintByIndex(i);
         float cx = mItemCenterPoint.x;
         float cy = mItemCenterPoint.y;
-        canvas.drawCircle(cx, cy, paint.getTextSize() / 2, paint);
+        canvas.drawCircle(cx, cy, getContext().getResources().getDimensionPixelSize(R.dimen.item_radius), paint);
     }
 
     private Paint getPaintByIndex(int i) {
