@@ -179,6 +179,7 @@ public class PinView extends AppCompatEditText {
 
     public void setDelayPasswordEnable(boolean isEnable) {
         this.delayPasswordEnable = isEnable;
+        invalidate();
     }
 
     @Override
@@ -196,6 +197,7 @@ public class PinView extends AppCompatEditText {
 
     public void setPasswordType(boolean isPasswordType) {
         this.mIsPasswordType = isPasswordType;
+        invalidate();
     }
 
     private void setMaxLength(int maxLength) {
